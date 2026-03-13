@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finanzas · v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Cabinet+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --bg:       #080909;
+  --surface:  #111214;
+  --surface2: #191b1e;
+  --surface3: #212326;
+  --border:   #252729;
+  --border2:  #2e3033;
+  --text:     #edeae4;
+  --muted:    #5a5e68;
+  --muted2:   #3a3d45;
+  --green:    #b8f552;
+  --teal:     #52f5c8;
+  --red:      #f55252;
+  --yellow:   #f5c852;
+  --purple:   #a952f5;
+  --blue:     #52aaf5;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Cabinet Grotesk',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+/* ── NOISE TEXTURE ── */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:0.025;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat:repeat;background-size:128px 128px;z-index:999;}
+
+/* ── SCREENS ── */
+.screen{min-height:100vh;display:none;}
+.screen.active{display:flex;}
+#upload-screen{flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;position:relative;}
+#confirm-screen{align-items:center;justify-content:center;padding:40px 20px;}
+#processing-screen{flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;}
+#dashboard-screen{flex-direction:column;}
+
+/* ── UPLOAD SCREEN ── */
+.upload-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+.upload-bg-line{position:absolute;background:linear-gradient(90deg,transparent,rgba(184,245,82,0.06),transparent);height:1px;}
+.upload-bg-line:nth-child(1){top:20%;width:100%;}
+.upload-bg-line:nth-child(2){top:50%;width:100%;}
+.upload-bg-line:nth-child(3){top:80%;width:100%;}
+.upload-bg-dot{position:absolute;width:300px;height:300px;border-radius:50%;filter:blur(80px);pointer-events:none;}
+.upload-bg-dot:nth-child(4){background:rgba(184,245,82,0.04);top:-100px;right:-100px;}
+.upload-bg-dot:nth-child(5){background:rgba(82,245,200,0.03);bottom:-100px;left:-100px;}
+
+.upload-card{background:var(--surface);border:1px solid var(--border2);border-radius:24px;padding:56px 52px;max-width:560px;width:100%;position:relative;z-index:1;}
+.upload-eyebrow{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--green);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:8px;}
+.upload-eyebrow::before{content:'';width:20px;height:1px;background:var(--green);}
+h1.upload-title{font-family:'Syne',sans-serif;font-size:2.6rem;font-weight:800;line-height:1.05;margin-bottom:12px;letter-spacing:-0.03em;}
+h1.upload-title em{color:var(--green);font-style:normal;}
+.upload-sub{color:var(--muted);font-size:0.95rem;line-height:1.6;margin-bottom:36px;}
+
+/* Drop zone */
+.drop-zone{border:1.5px dashed var(--border2);border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;background:var(--surface2);}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--green);background:rgba(184,245,82,0.04);}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-icon{font-size:2rem;margin-bottom:12px;}
+.drop-label{font-size:0.88rem;color:var(--muted);line-height:1.6;}
+.drop-label strong{color:var(--text);font-weight:600;}
+.drop-label span{font-size:0.78rem;display:block;margin-top:4px;color:var(--muted2);}
+
+/* File chips */
+.file-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;min-height:0;}
+.file-chip{display:flex;align-items:center;gap:6px;background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:5px 10px;font-size:0.75rem;font-family:'DM Mono',monospace;animation:chipIn 0.2s ease;}
+@keyframes chipIn{from{opacity:0;transform:scale(0.9);}to{opacity:1;transform:scale(1);}}
+.file-chip-icon{font-size:0.9rem;}
+.file-chip-remove{color:var(--muted);cursor:pointer;margin-left:2px;font-size:1rem;line-height:1;transition:color 0.15s;}
+.file-chip-remove:hover{color:var(--red);}
+
+.btn-primary{width:100%;background:var(--green);color:#000;border:none;padding:14px;border-radius:12px;font-size:0.92rem;font-weight:700;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;margin-top:20px;transition:all 0.2s;letter-spacing:0.01em;}
+.btn-primary:hover{opacity:0.88;transform:translateY(-1px);}
+.btn-primary:disabled{opacity:0.35;cursor:not-allowed;transform:none;}
+.privacy-note{font-size:0.72rem;color:var(--muted2);text-align:center;margin-top:14px;line-height:1.5;}
+
+/* ── ACCOUNT CONFIRM MODAL ── */
+#confirm-screen{background:rgba(8,9,9,0.92);backdrop-filter:blur(12px);position:fixed;inset:0;z-index:200;min-height:auto;}
+.confirm-modal{background:var(--surface);border:1px solid var(--border2);border-radius:24px;padding:48px;max-width:520px;width:100%;position:relative;animation:modalIn 0.35s cubic-bezier(0.16,1,0.3,1);}
+@keyframes modalIn{from{opacity:0;transform:scale(0.92) translateY(20px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.confirm-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(184,245,82,0.1);border:1px solid rgba(184,245,82,0.25);border-radius:20px;padding:5px 14px;font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--green);margin-bottom:24px;}
+.confirm-title{font-family:'Syne',sans-serif;font-size:1.7rem;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;}
+.confirm-sub{color:var(--muted);font-size:0.88rem;line-height:1.6;margin-bottom:28px;}
+.account-cards{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;}
+.account-card{display:flex;align-items:center;gap:14px;background:var(--surface2);border:1px solid var(--border2);border-radius:14px;padding:14px 16px;transition:border-color 0.2s;}
+.account-card.confirmed{border-color:rgba(184,245,82,0.3);}
+.account-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;}
+.account-info{flex:1;}
+.account-name{font-size:0.88rem;font-weight:600;margin-bottom:2px;}
+.account-detail{font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace;}
+.account-toggle{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border2);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0;font-size:0.75rem;}
+.account-toggle.on{background:var(--green);border-color:var(--green);color:#000;}
+.confirm-note{font-size:0.75rem;color:var(--muted);line-height:1.5;padding:12px 14px;background:var(--surface2);border-radius:10px;margin-bottom:24px;}
+.confirm-btns{display:flex;gap:10px;}
+.btn-secondary{flex:1;background:transparent;border:1px solid var(--border2);color:var(--text);padding:12px;border-radius:11px;font-size:0.88rem;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;transition:all 0.2s;}
+.btn-secondary:hover{border-color:var(--muted);}
+.btn-confirm{flex:2;background:var(--green);color:#000;border:none;padding:12px;border-radius:11px;font-size:0.88rem;font-weight:700;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;transition:all 0.2s;}
+.btn-confirm:hover{opacity:0.88;}
+
+/* ── PROCESSING SCREEN ── */
+.processing-card{background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:48px;max-width:420px;width:100%;text-align:center;}
+.processing-title{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:700;margin-bottom:6px;}
+.processing-sub{color:var(--muted);font-size:0.85rem;margin-bottom:36px;}
+.steps{display:flex;flex-direction:column;gap:12px;text-align:left;}
+.step{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:11px;background:var(--surface2);border:1px solid var(--border);transition:all 0.3s;}
+.step.active{border-color:rgba(184,245,82,0.3);background:rgba(184,245,82,0.04);}
+.step.done{border-color:rgba(184,245,82,0.2);}
+.step-icon{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0;font-family:'DM Mono',monospace;color:var(--muted);}
+.step.active .step-icon{border-color:var(--green);color:var(--green);}
+.step.done .step-icon{background:var(--green);border-color:var(--green);color:#000;}
+.spinner{width:12px;height:12px;border:1.5px solid rgba(184,245,82,0.3);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.step-text{font-size:0.84rem;}
+.step.active .step-text{color:var(--text);}
+.step-text{color:var(--muted);}
+
+/* ── DASHBOARD ── */
+.dash-header{padding:18px 36px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100;}
+.dash-logo{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;display:flex;align-items:center;gap:10px;letter-spacing:-0.02em;}
+.dash-logo-dot{width:8px;height:8px;border-radius:50%;background:var(--green);}
+.header-right{display:flex;align-items:center;gap:10px;}
+.month-badge{font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--muted);background:var(--surface);border:1px solid var(--border);padding:6px 14px;border-radius:20px;}
+.btn-reset{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:8px;font-size:0.78rem;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;transition:all 0.2s;}
+.btn-reset:hover{border-color:var(--red);color:var(--red);}
+
+.dash-body{padding:24px 36px;max-width:1600px;margin:0 auto;width:100%;}
+
+/* Summary bar */
+.summary-bar{display:grid;grid-template-columns:1.4fr 1.4fr 1.6fr 1.2fr 1fr;gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;}
+.stat-card.income-card{border-color:rgba(184,245,82,0.25);background:rgba(184,245,82,0.03);}
+.stat-card.expense-card{border-color:rgba(245,82,82,0.2);background:rgba(245,82,82,0.02);}
+.stat-card.balance-card{border-color:rgba(82,245,200,0.2);background:rgba(82,245,200,0.02);}
+.stat-label{font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+.stat-value{font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:700;letter-spacing:-0.03em;line-height:1;}
+.stat-value.green{color:var(--green);}
+.stat-value.red{color:var(--red);}
+.stat-value.teal{color:var(--teal);}
+.stat-sub{font-size:0.72rem;color:var(--muted);margin-top:5px;}
+.stat-sub.pos{color:rgba(184,245,82,0.6);}
+.stat-sub.neg{color:rgba(245,82,82,0.6);}
+
+/* Balance indicator */
+.balance-indicator{display:flex;align-items:center;gap:6px;margin-top:8px;}
+.balance-bar-bg{flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden;}
+.balance-bar-fill{height:100%;border-radius:2px;transition:width 0.8s cubic-bezier(0.16,1,0.3,1);}
+
+/* Main section */
+.main-row{display:grid;grid-template-columns:290px 1fr;gap:16px;align-items:stretch;height:640px;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;}
+.panel-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;flex-wrap:wrap;}
+.panel-title{font-size:0.82rem;font-weight:600;}
+.panel-badge{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted);background:var(--surface2);padding:3px 9px;border-radius:20px;}
+.panel-scroll{overflow-y:auto;flex:1;min-height:0;}
+.panel-scroll::-webkit-scrollbar{width:3px;}
+.panel-scroll::-webkit-scrollbar-track{background:transparent;}
+.panel-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* Tab toggle */
+.tab-group{display:flex;gap:4px;background:var(--surface2);padding:3px;border-radius:8px;}
+.tab-btn{padding:5px 12px;border-radius:6px;font-size:0.73rem;border:none;background:transparent;color:var(--muted);cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;transition:all 0.15s;white-space:nowrap;}
+.tab-btn.active{background:var(--surface3);color:var(--text);font-weight:600;}
+
+/* Cat bars */
+.cat-list{padding:12px 16px;}
+.cat-item{margin-bottom:10px;cursor:pointer;padding:6px 8px;border-radius:8px;transition:background 0.12s;}
+.cat-item:hover{background:var(--surface2);}
+.cat-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.cat-name{display:flex;align-items:center;gap:7px;font-size:0.8rem;}
+.cat-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.cat-amount{font-family:'DM Mono',monospace;font-size:0.77rem;}
+.cat-pct{font-size:0.68rem;color:var(--muted);margin-left:3px;}
+.cat-bar-bg{height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;}
+.cat-bar-fill{height:100%;border-radius:2px;transition:width 0.8s cubic-bezier(0.16,1,0.3,1);}
+
+/* Otros nudge */
+.otros-nudge{margin:8px 16px 4px;padding:10px 12px;background:rgba(245,200,82,0.06);border:1px solid rgba(245,200,82,0.2);border-radius:10px;font-size:0.73rem;color:var(--yellow);display:flex;align-items:flex-start;gap:7px;line-height:1.5;}
+
+/* Transaction panel */
+.search-bar{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:7px;align-items:center;flex-shrink:0;flex-wrap:wrap;}
+.search-input{flex:1;min-width:120px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:8px;font-family:'Cabinet Grotesk',sans-serif;font-size:0.82rem;outline:none;transition:border-color 0.2s;}
+.search-input:focus{border-color:var(--green);}
+.search-input::placeholder{color:var(--muted);}
+.filter-sel{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:8px;font-family:'Cabinet Grotesk',sans-serif;font-size:0.78rem;outline:none;cursor:pointer;}
+.sort-group{display:flex;gap:3px;margin-left:auto;}
+.sort-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:7px;font-size:0.72rem;cursor:pointer;font-family:'DM Mono',monospace;transition:all 0.15s;}
+.sort-btn.active{border-color:var(--green);color:var(--green);background:rgba(184,245,82,0.06);}
+
+/* Transaction table */
+.txn-table{width:100%;border-collapse:collapse;}
+.txn-table th{text-align:left;padding:8px 16px;font-size:0.64rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:400;font-family:'DM Mono',monospace;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5;}
+.txn-row{border-bottom:1px solid var(--border);transition:background 0.1s;}
+.txn-row:hover{background:var(--surface2);}
+.txn-row.dimmed{opacity:0.38;}
+.txn-row td{padding:8px 16px;font-size:0.82rem;vertical-align:middle;}
+.txn-date{font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--muted);white-space:nowrap;}
+.txn-desc{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.account-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-size:0.65rem;font-family:'DM Mono',monospace;border:1px solid;white-space:nowrap;}
+.account-pill.credit{color:#f0845a;border-color:rgba(240,132,90,0.25);background:rgba(240,132,90,0.06);}
+.account-pill.debit{color:var(--blue);border-color:rgba(82,170,245,0.25);background:rgba(82,170,245,0.06);}
+.account-pill.nu{color:var(--purple);border-color:rgba(169,82,245,0.25);background:rgba(169,82,245,0.06);}
+
+/* Status + category badges */
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:0.68rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:1px solid;}
+.status-badge.income{color:var(--green);border-color:rgba(184,245,82,0.3);background:rgba(184,245,82,0.08);}
+.status-badge.expense{color:var(--red);border-color:rgba(245,82,82,0.25);background:rgba(245,82,82,0.06);}
+.status-badge.internal{color:var(--muted);border-color:var(--border);background:var(--surface2);}
+.status-badge.ignored{color:var(--muted2);border-color:var(--muted2);background:transparent;}
+.status-badge.otros-warn{color:var(--yellow);border-color:rgba(245,200,82,0.3);background:rgba(245,200,82,0.06);}
+.cat-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:0.68rem;cursor:pointer;transition:border-color 0.15s;white-space:nowrap;background:var(--surface2);border:1px solid var(--border);}
+.cat-badge:hover{border-color:var(--green);}
+.msi-tag{font-size:0.6rem;background:rgba(82,245,200,0.08);color:var(--teal);border:1px solid rgba(82,245,200,0.2);padding:1px 5px;border-radius:3px;margin-left:4px;}
+.txn-amount{font-family:'DM Mono',monospace;font-size:0.8rem;text-align:right;white-space:nowrap;}
+.txn-amount.pos{color:var(--green);}
+.txn-amount.neg{color:var(--text);}
+.txn-amount.dim{color:var(--muted);}
+
+/* Dropdowns */
+.dd{position:fixed;background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:6px;z-index:400;min-width:180px;box-shadow:0 20px 60px rgba(0,0,0,0.8);display:none;}
+.dd-section{font-size:0.63rem;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;padding:5px 9px 3px;}
+.dd-opt{padding:7px 10px;border-radius:7px;font-size:0.8rem;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background 0.1s;}
+.dd-opt:hover{background:var(--surface2);}
+.dd-divider{height:1px;background:var(--border);margin:4px 0;}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--green);color:#000;padding:10px 16px;border-radius:9px;font-size:0.8rem;font-weight:700;transform:translateY(60px);opacity:0;transition:all 0.3s;z-index:600;font-family:'Cabinet Grotesk',sans-serif;}
+.toast.show{transform:translateY(0);opacity:1;}
+
+@media(max-width:1200px){.summary-bar{grid-template-columns:repeat(3,1fr);}.main-row{grid-template-columns:1fr;height:auto;}}
+@media(max-width:700px){.summary-bar{grid-template-columns:1fr 1fr;}.dash-body{padding:16px;}.dash-header{padding:14px 16px;}}
+</style>
+</head>
+<body>
+
+<!-- ══ UPLOAD SCREEN ══ -->
+<div id="upload-screen" class="screen active">
+  <div class="upload-bg">
+    <div class="upload-bg-line"></div>
+    <div class="upload-bg-line"></div>
+    <div class="upload-bg-line"></div>
+    <div class="upload-bg-dot"></div>
+    <div class="upload-bg-dot"></div>
+  </div>
+  <div class="upload-card">
+    <div class="upload-eyebrow">Finanzas · v2</div>
+    <h1 class="upload-title">Tu dinero,<br><em>sin filtros.</em></h1>
+    <p class="upload-sub">Sube tus estados de cuenta — crédito, débito, Nu. Todo se procesa en tu navegador. Nada sale de tu dispositivo.</p>
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".pdf" multiple>
+      <div class="drop-icon">📂</div>
+      <div class="drop-label">
+        <strong>Elige tus estados de cuenta</strong>
+        <span>Puedes subir varios PDFs a la vez · BBVA Crédito, BBVA Débito, Nu México</span>
+      </div>
+    </div>
+    <div class="file-chips" id="file-chips"></div>
+    <button class="btn-primary" id="btn-analyze" disabled onclick="startAnalysis()">Analizar mis finanzas →</button>
+    <p class="privacy-note">🔒 Solo se envían nombres de comercios a la IA para categorización — nunca datos personales, CLABEs ni RFC.</p>
+  </div>
+</div>
+
+<!-- ══ CONFIRM SCREEN (MODAL) ══ -->
+<div id="confirm-screen" class="screen">
+  <div class="confirm-modal">
+    <div class="confirm-badge">✦ Paso 1 de 2 · Confirmar cuentas</div>
+    <h2 class="confirm-title">¿Estas cuentas son tuyas?</h2>
+    <p class="confirm-sub">Detectamos estas cuentas en tus estados de cuenta. Confirma cuáles te pertenecen — usaremos esta información para identificar y excluir transferencias entre tus propias cuentas.</p>
+    <div class="account-cards" id="account-cards"></div>
+    <div class="confirm-note">💡 Las transferencias entre cuentas confirmadas se marcarán automáticamente como <strong>transferencias internas</strong> y no afectarán tus totales de ingresos o gastos.</div>
+    <div class="confirm-btns">
+      <button class="btn-secondary" onclick="goBack()">← Volver</button>
+      <button class="btn-confirm" onclick="confirmAccounts()">Confirmar y continuar →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PROCESSING SCREEN ══ -->
+<div id="processing-screen" class="screen">
+  <div class="processing-card">
+    <div class="processing-title">Analizando tus finanzas</div>
+    <p class="processing-sub">Esto tarda unos segundos…</p>
+    <div class="steps">
+      <div class="step" id="step-1"><div class="step-icon" id="si-1">1</div><span class="step-text">Leyendo PDFs</span></div>
+      <div class="step" id="step-2"><div class="step-icon" id="si-2">2</div><span class="step-text">Detectando transferencias internas</span></div>
+      <div class="step" id="step-3"><div class="step-icon" id="si-3">3</div><span class="step-text">Categorizando con IA</span></div>
+      <div class="step" id="step-4"><div class="step-icon" id="si-4">4</div><span class="step-text">Construyendo dashboard</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DASHBOARD SCREEN ══ -->
+<div id="dashboard-screen" class="screen">
+  <div class="dash-header">
+    <div class="dash-logo"><div class="dash-logo-dot"></div>Finanzas · v2</div>
+    <div class="header-right">
+      <div class="month-badge" id="dash-month">—</div>
+      <button class="btn-reset" onclick="resetApp()">↺ Nuevo análisis</button>
+    </div>
+  </div>
+  <div class="dash-body">
+    <!-- Summary bar -->
+    <div class="summary-bar">
+      <div class="stat-card income-card">
+        <div class="stat-label">Ingresos del mes</div>
+        <div class="stat-value green" id="stat-income">—</div>
+        <div class="stat-sub pos" id="stat-income-sub">—</div>
+      </div>
+      <div class="stat-card expense-card">
+        <div class="stat-label">Gastos del mes</div>
+        <div class="stat-value red" id="stat-expense">—</div>
+        <div class="stat-sub neg" id="stat-expense-sub">—</div>
+      </div>
+      <div class="stat-card balance-card">
+        <div class="stat-label">Balance neto</div>
+        <div class="stat-value teal" id="stat-balance">—</div>
+        <div class="balance-indicator">
+          <div class="balance-bar-bg"><div class="balance-bar-fill" id="balance-bar" style="width:0%;background:var(--teal)"></div></div>
+          <span style="font-size:0.68rem;color:var(--muted);font-family:'DM Mono',monospace;" id="balance-pct">—</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Deuda MSI activa</div>
+        <div class="stat-value" id="stat-msi">—</div>
+        <div class="stat-sub" id="stat-msi-sub">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">💳 Pagar sin intereses</div>
+        <div class="stat-value" style="font-size:1.2rem" id="stat-pay">—</div>
+        <div class="stat-sub" id="stat-pay-sub">—</div>
+      </div>
+    </div>
+
+    <!-- Main row -->
+    <div class="main-row">
+      <!-- Left: category panel with tabs -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Desglose</span>
+          <div class="tab-group">
+            <button class="tab-btn active" id="tab-gastos" onclick="switchTab('gastos')">Gastos</button>
+            <button class="tab-btn" id="tab-ingresos" onclick="switchTab('ingresos')">Ingresos</button>
+          </div>
+        </div>
+        <div class="panel-scroll">
+          <div id="otros-nudge-slot"></div>
+          <div class="cat-list" id="cat-list"></div>
+        </div>
+      </div>
+
+      <!-- Right: transaction table -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Transacciones</span>
+          <span class="panel-badge" id="txn-count">—</span>
+          <div class="sort-group">
+            <button class="sort-btn active" id="sort-amt" onclick="setSort('amount')">↓ Monto</button>
+            <button class="sort-btn" id="sort-date" onclick="setSort('date')">📅 Fecha</button>
+          </div>
+        </div>
+        <div class="search-bar">
+          <input class="search-input" id="search" placeholder="Buscar…" oninput="filterTxns()">
+          <select class="filter-sel" id="cat-filter" onchange="filterTxns()">
+            <option value="">Todas las categorías</option>
+          </select>
+          <select class="filter-sel" id="status-filter" onchange="filterTxns()">
+            <option value="">Todos los movimientos</option>
+            <option value="income">Solo ingresos</option>
+            <option value="expense">Solo gastos</option>
+            <option value="internal">Transferencias internas</option>
+            <option value="ignored">Ignorados</option>
+          </select>
+          <select class="filter-sel" id="account-filter" onchange="filterTxns()">
+            <option value="">Todas las cuentas</option>
+          </select>
+        </div>
+        <div class="panel-scroll">
+          <table class="txn-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Descripción</th>
+                <th>Cuenta</th>
+                <th>Categoría / Fuente</th>
+                <th>Estado</th>
+                <th style="text-align:right">Monto</th>
+              </tr>
+            </thead>
+            <tbody id="txn-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Dropdowns -->
+<div class="dd" id="cat-dd"></div>
+<div class="dd" id="status-dd"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── CONSTANTS ──────────────────────────────────────────────────────
+const MY_CLABES = new Set(); // populated from confirmed accounts
+const KNOWN_INTERNAL_KEYWORDS = [
+  /PAGO TARJETA DE CREDITO/i,
+  /PAGO CUENTA DE TERCERO/i,
+  /Retiro de Cajita/i,
+  /Dep[oó]sito en Cajita/i,
+  /Congelaste saldo/i,
+  /BMOVIL\.PAGO/i,
+];
+
+const EXPENSE_CATS = [
+  {id:'food',        label:'Restaurantes',    emoji:'🍽️', color:'#f0845a'},
+  {id:'cafe',        label:'Café',            emoji:'☕',  color:'#c8a46e'},
+  {id:'groceries',   label:'Supermercado',    emoji:'🛒',  color:'#5af0c8'},
+  {id:'transport',   label:'Transporte',      emoji:'🚗',  color:'#5ab4f0'},
+  {id:'health',      label:'Salud & Farmacia',emoji:'💊',  color:'#f05ab4'},
+  {id:'subscriptions',label:'Suscripciones',  emoji:'📱',  color:'#a05af0'},
+  {id:'shopping',    label:'Compras',         emoji:'🛍️', color:'#f0c85a'},
+  {id:'education',   label:'Educación',       emoji:'📚',  color:'#5af05a'},
+  {id:'rent',        label:'Renta & Hogar',   emoji:'🏠',  color:'#f05a5a'},
+  {id:'entertainment',label:'Entretenimiento',emoji:'🎬',  color:'#c8f05a'},
+  {id:'fitness',     label:'Fitness',         emoji:'🏋️', color:'#5af0a0'},
+  {id:'travel',      label:'Viajes',          emoji:'✈️', color:'#f0f05a'},
+  {id:'other',       label:'Otros',           emoji:'📦',  color:'#6b6f7a'},
+];
+const INCOME_CATS = [
+  {id:'salary',      label:'Salario',         emoji:'💼',  color:'#b8f552'},
+  {id:'freelance',   label:'Freelance',       emoji:'💻',  color:'#52f5c8'},
+  {id:'reimbursement',label:'Reembolso',      emoji:'👥',  color:'#52aaf5'},
+  {id:'other_income',label:'Otro ingreso',    emoji:'📥',  color:'#a952f5'},
+];
+const ALL_CATS = [...EXPENSE_CATS, ...INCOME_CATS];
+const CM = Object.fromEntries(ALL_CATS.map(c=>[c.id,c]));
+
+// ── STATE ──────────────────────────────────────────────────────────
+let FILES = [];        // raw File objects
+let DETECTED_ACCOUNTS = []; // {clabe, type, label, icon, color}
+let CONFIRMED_CLABES = new Set();
+let ALL = [];          // all parsed transactions
+let CURRENT_TAB = 'gastos';
+let SORT_MODE = 'amount';
+
+// ── FILE HANDLING ──────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+const fi = document.getElementById('file-input');
+
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop', e=>{
+  e.preventDefault(); dz.classList.remove('dragover');
+  addFiles([...e.dataTransfer.files].filter(f=>f.type==='application/pdf'));
+});
+fi.addEventListener('change', e=>{addFiles([...e.target.files]); fi.value='';});
+
+function addFiles(newFiles){
+  newFiles.forEach(f=>{
+    if(!FILES.find(x=>x.name===f.name)) FILES.push(f);
+  });
+  renderChips();
+}
+
+function removeFile(name){
+  FILES = FILES.filter(f=>f.name!==name);
+  renderChips();
+}
+
+function renderChips(){
+  const el = document.getElementById('file-chips');
+  el.innerHTML = FILES.map(f=>`
+    <div class="file-chip">
+      <span class="file-chip-icon">📄</span>
+      <span>${f.name.replace('.pdf','')}</span>
+      <span class="file-chip-remove" onclick="removeFile('${f.name}')">×</span>
+    </div>`).join('');
+  document.getElementById('btn-analyze').disabled = FILES.length === 0;
+}
+
+// ── STATEMENT TYPE DETECTION ───────────────────────────────────────
+function detectType(text){
+  if(/COMPRAS Y CARGOS DIFERIDOS A MESES SIN INTERESES/i.test(text) ||
+     /TARJETA ORO BBVA|TARJETA.*BBVA.*TDC|TU PAGO REQUERIDO ESTE PERIODO/i.test(text))
+    return 'bbva-credit';
+  if(/Libret[oó]n B[aá]sico|SPEI RECIBIDO|SPEI ENVIADO|No\. de Cuenta.*1567/i.test(text) &&
+     !/COMPRAS Y CARGOS DIFERIDOS/i.test(text))
+    return 'bbva-debit';
+  if(/Nu M[eé]xico|Cuenta Nu:|Cajita|CLABE.*638/i.test(text))
+    return 'nu';
+  return 'unknown';
+}
+
+// ── PARSERS ────────────────────────────────────────────────────────
+function parseBBVACredit(text){
+  const txns = [];
+  const msiList = [];
+
+  // MSI plans
+  const msiSection = text.match(/COMPRAS Y CARGOS DIFERIDOS A MESES SIN INTERESES([\s\S]*?)CARGOS,COMPRAS Y ABONOS REGULARES/i);
+  if(msiSection){
+    const rx = /(\d{2}-[a-z]{3}-\d{4})\s+(.+?)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+(\d+)\s+de\s+(\d+)/gi;
+    let m;
+    while((m=rx.exec(msiSection[1]))!==null){
+      const[,date,desc,orig,pend,pay,num,tot]=m;
+      let mc=desc.replace(/;\s*Tarjeta Digital \*+\d+/gi,'').replace(/\s+/g,' ').trim();
+      if(!mc||mc.length<3) continue;
+      msiList.push({
+        id:uid(), date, dateObj:parseDate(date), source:'bbva-credit',
+        merchant:mc+' (MSI)', merchantClean:mc,
+        amount:parseFloat(pay.replace(/,/g,'')),
+        pendingTotal:parseFloat(pend.replace(/,/g,'')),
+        originalAmount:parseFloat(orig.replace(/,/g,'')),
+        installNum:parseInt(num), installTotal:parseInt(tot),
+        category:'shopping', status:'expense', isMSI:true, isNewMSI:false,
+      });
+    }
+  }
+
+  // Regular transactions
+  const regSection = text.match(/CARGOS,COMPRAS Y ABONOS REGULARES\(NO A MESES\)([\s\S]*?)(?:TOTAL CARGOS|ATENCI[OÓ]N DE QUEJAS)/i);
+  if(regSection){
+    const rx = /(\d{2}-[a-z]{3}-\d{4})\s+\d{2}-[a-z]{3}-\d{4}\s+(.+?)\s+([+\-])\s+\$([\d,]+\.\d{2})/gi;
+    let m;
+    while((m=rx.exec(regSection[1]))!==null){
+      const[,opDate,rawDesc,sign,rawAmt]=m;
+      if(sign==='-') continue;
+      let merchant = rawDesc
+        .replace(/;\s*Tarjeta Digital \*+\d+/gi,'')
+        .replace(/MXP.*?TIPO DE CAMBIO.*$/gi,'')
+        .replace(/USD.*?TIPO DE CAMBIO.*$/gi,'')
+        .replace(/IVA.*$/gi,'')
+        .replace(/\s+/g,' ').trim();
+      if(/BMOVIL\.PAGO|PAGO TDC/i.test(merchant)) continue;
+      if(/^\d{2} DE \d{2}/i.test(merchant)) continue;
+      const msiMatch = merchant.match(/A\s+(\d+)\s+MSI$/i);
+      const isNewMSI = !!msiMatch;
+      const cleanMerchant = isNewMSI ? merchant.replace(/\s+A\s+\d+\s+MSI$/i,'').trim() : merchant;
+      txns.push({
+        id:uid(), date:opDate, dateObj:parseDate(opDate), source:'bbva-credit',
+        merchant:cleanMerchant, amount:parseFloat(rawAmt.replace(/,/g,'')),
+        category:'other', status:'expense', isMSI:false,
+        isNewMSI, msiMonths:isNewMSI?parseInt(msiMatch[1]):null,
+      });
+    }
+  }
+  return{txns, msiList};
+}
+
+function parseBBVADebit(text, ownClabes=[]){
+  const txns = [];
+  const clabeMatch = text.match(/No\.\s*Cuenta\s*CLABE\s*([\d\s]+)/i);
+  const myCLABE = clabeMatch ? clabeMatch[1].replace(/\s/g,'') : null;
+
+  // Capture full transaction blocks — each starts with two dates
+  // Split text into blocks by date pattern so we get the CLABE line too
+  const blocks = text.split(/(?=\d{2}\/[A-Z]{3}\s+\d{2}\/[A-Z]{3}\s)/);
+
+  blocks.forEach(block=>{
+    const dateMatch = block.match(/^(\d{2}\/[A-Z]{3})\s+\d{2}\/[A-Z]{3}\s+(.+)/s);
+    if(!dateMatch) return;
+    const rawDate = dateMatch[1];
+    const rest = dateMatch[2];
+
+    const date = normalizeBBVADebitDate(rawDate, text);
+    if(!date) return;
+
+    // Extract amount — first 18-digit-free number with decimals
+    const amtMatch = rest.match(/([\d,]+\.\d{2})/);
+    if(!amtMatch) return;
+    const amount = parseFloat(amtMatch[1].replace(/,/g,''));
+    if(amount < 0.01) return;
+
+    // Extract description (first line of rest)
+    const descLine = rest.split('\n')[0].replace(/\s+([\d,]+\.\d{2}).*$/,'').trim();
+    let desc = descLine.replace(/Referencia\s+\S+/gi,'').replace(/\s+/g,' ').trim();
+    if(!desc || desc.length < 3) return;
+
+    // Extract counterparty CLABE from block (18-digit sequence)
+    const clabeInBlock = block.replace(/\s/g,'').match(/00\d{16}|0\d{17}|\d{18}/);
+    const counterpartyCLABE = clabeInBlock ? clabeInBlock[0] : null;
+
+    // THE RULE: internal if counterparty CLABE is one of ours
+    const counterpartyIsOwn = counterpartyCLABE &&
+      ownClabes.some(cl => cl.replace(/\s/g,'') === counterpartyCLABE ||
+                           counterpartyCLABE.endsWith(cl.replace(/\s/g,'').slice(-10)));
+
+    // Also keep keyword-based rules for things with no CLABE (PAGO TARJETA etc)
+    const isKeywordInternal = isInternalKeyword(desc);
+    const isOutflow = /SPEI ENVIADO|PAGO TARJETA|PAGO CUENTA DE TERCERO/i.test(desc);
+    const isInflow  = /SPEI RECIBIDO|COMPENSACION/i.test(desc);
+
+    let status = 'expense';
+    if(isKeywordInternal || counterpartyIsOwn){
+      status = 'internal';
+    } else if(isInflow){
+      status = 'income';
+    } else if(isOutflow){
+      // Outflow with no CLABE match — only mark internal if going to known institution
+      status = 'internal';
+    }
+
+    const senderMatch = rest.match(/([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,\/]{3,})$/m);
+    const label = senderMatch ? senderMatch[1].trim() : desc;
+
+    txns.push({
+      id:uid(), date, dateObj:parseDate(date), source:'bbva-debit',
+      merchant: cleanDebitDesc(desc, label),
+      amount, category: status==='income'?'other_income':'other',
+      status, isMSI:false, isNewMSI:false,
+      rawDesc: block,
+      counterpartyCLABE,
+    });
+  });
+  return{txns, msiList:[], clabe:myCLABE};
+}
+
+function parseNu(text, ownClabes=[]){
+  const txns = [];
+  const clabeMatch = text.match(/CLABE:\s*([\d]+)/i);
+  const myCLABE = clabeMatch ? clabeMatch[1] : null;
+
+  // Split into transaction blocks by date
+  const blocks = text.split(/(?=\d{2}\s+[A-Z]{3}\s+\d{4}\s)/);
+
+  blocks.forEach(block=>{
+    const dateMatch = block.match(/^(\d{2}\s+[A-Z]{3}\s+\d{4})\s+(.+)/s);
+    if(!dateMatch) return;
+    const rawDate = dateMatch[1];
+    const rest = dateMatch[2];
+    const date = normalizeNuDate(rawDate);
+    if(!date) return;
+
+    // Extract amount
+    const amtMatch = rest.match(/([+\-]?\$[\d,]+\.\d{2})/);
+    if(!amtMatch) return;
+    const isNeg = amtMatch[1].startsWith('-');
+    const amount = parseFloat(amtMatch[1].replace(/[+\-$,]/g,''));
+    if(amount < 0.01) return;
+
+    // Description: first line before the amount
+    const descLine = rest.split('\n')[0].replace(/[+\-]?\$[\d,]+\.\d{2}.*/,'').trim();
+    if(!descLine || descLine.length < 2) return;
+
+    // Extract counterparty CLABE from block
+    const clabeInBlock = block.replace(/\s/g,'').match(/\d{18}/);
+    const counterpartyCLABE = clabeInBlock ? clabeInBlock[0] : null;
+
+    const counterpartyIsOwn = counterpartyCLABE &&
+      ownClabes.some(cl => cl.replace(/\s/g,'') === counterpartyCLABE ||
+                           counterpartyCLABE.endsWith(cl.replace(/\s/g,'').slice(-10)));
+
+    let status = 'income';
+    if(isInternalKeyword(descLine)){
+      status = 'internal';
+    } else if(isNeg){
+      status = 'internal';
+    } else if(counterpartyIsOwn){
+      // Inflow FROM one of our own accounts = internal
+      status = 'internal';
+    }
+
+    txns.push({
+      id:uid(), date, dateObj:parseDate(date), source:'nu',
+      merchant: descLine.replace(/\s+/g,' ').trim(),
+      amount, category: status==='income'?'other_income':'other',
+      status, isMSI:false, isNewMSI:false,
+      rawDesc: block,
+      counterpartyCLABE,
+    });
+  });
+  return{txns, msiList:[], clabe:myCLABE};
+}
+
+// ── HELPER: INTERNAL KEYWORD CHECK ────────────────────────────────
+function isInternalKeyword(desc){
+  return KNOWN_INTERNAL_KEYWORDS.some(rx=>rx.test(desc));
+}
+
+// ── HELPER: CROSS-ACCOUNT TRANSFER DETECTION ─────────────────────
+// After parsing, do one final pass using the clean rule:
+// internal = counterparty CLABE is in confirmed own CLABEs
+function detectCrossAccountTransfers(allTxns){
+  allTxns.forEach(t=>{
+    if(t.status==='internal') return; // already flagged
+    if(!t.counterpartyCLABE) return;
+    const cpClabe = t.counterpartyCLABE.replace(/\s/g,'');
+    const isOwn = [...CONFIRMED_CLABES].some(cl=>
+      cl.replace(/\s/g,'') === cpClabe ||
+      cpClabe.endsWith(cl.replace(/\s/g,'').slice(-10))
+    );
+    if(isOwn) t.status = 'internal';
+  });
+}
+
+// ── DATE HELPERS ───────────────────────────────────────────────────
+function parseDate(s){
+  if(!s) return new Date(0);
+  // dd-mmm-yyyy
+  const mo={ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
+  const m1 = s.match(/(\d{2})-([a-z]{3})-(\d{4})/i);
+  if(m1) return new Date(+m1[3], mo[m1[2].toLowerCase()]??0, +m1[1]);
+  // dd/MMM (BBVA debit)
+  const m2 = s.match(/(\d{2})\/([A-Z]{3})\/(\d{4})/i);
+  if(m2) return new Date(+m2[3], mo[m2[2].toLowerCase()]??0, +m2[1]);
+  // dd MMM yyyy (Nu)
+  const m3 = s.match(/(\d{2})\s+([A-Z]{3})\s+(\d{4})/i);
+  if(m3) return new Date(+m3[3], mo[m3[2].toLowerCase()]??0, +m3[1]);
+  return new Date(0);
+}
+
+function normalizeBBVADebitDate(raw, fullText){
+  // raw = "18/ENE" — need to add year from statement header
+  const yearMatch = fullText.match(/Periodo.*?(\d{4})/i);
+  const year = yearMatch ? yearMatch[1] : '2026';
+  const mo={ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
+  const [d,mStr] = raw.split('/');
+  if(!d||!mStr||!mo[mStr]) return null;
+  return `${d}-${mStr.toLowerCase()}-${year}`;
+}
+
+function normalizeNuDate(raw){
+  // "27 FEB 2026" → "27-feb-2026"
+  const parts = raw.trim().split(/\s+/);
+  if(parts.length<3) return null;
+  return `${parts[0]}-${parts[1].toLowerCase()}-${parts[2]}`;
+}
+
+function cleanDebitDesc(desc, senderName){
+  if(/SPEI RECIBIDO/i.test(desc)) return senderName||desc;
+  if(/SPEI ENVIADO/i.test(desc)){
+    const nm = desc.match(/SPEI ENVIADO\s+\w+\s+(.*)/i);
+    return nm?nm[1].trim():desc;
+  }
+  return desc.replace(/CUENTA:.*$/i,'').replace(/BNET.*$/i,'').replace(/BMOV.*/i,'').trim()||desc;
+}
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+// ── ACCOUNT DETECTION FROM TEXT ────────────────────────────────────
+function extractAccountInfo(text, type){
+  let clabe='', label='', icon='', color='', shortId='';
+  if(type==='bbva-credit'){
+    const c=text.match(/CLABE:\s*([\d]+)/i);
+    clabe=c?c[1]:'';
+    const card=text.match(/N[uú]mero de tarjeta:\s*([\d]+)/i);
+    const cardShort=card?card[1].slice(-4):'????';
+    shortId=clabe?clabe.slice(-4):cardShort;
+    label=`BBVA Crédito ···${cardShort}`; // show card digits in title
+    icon='💳'; color='#f0845a';
+  } else if(type==='bbva-debit'){
+    const c=text.match(/No\.\s*Cuenta\s*CLABE\s*([\d\s]+)/i);
+    clabe=c?c[1].replace(/\s/g,''):'';
+    shortId=clabe?clabe.slice(-4):'????';
+    label=`BBVA Débito ···${shortId}`;
+    icon='🏦'; color='#52aaf5';
+  } else if(type==='nu'){
+    const c=text.match(/CLABE:\s*([\d]+)/i);
+    clabe=c?c[1]:'';
+    shortId=clabe?clabe.slice(-4):'????';
+    label=`Nu México ···${shortId}`;
+    icon='🟣'; color='#a952f5';
+  }
+  return{clabe, label, icon, color, type, shortId};
+}
+
+// ── MAIN FLOW ──────────────────────────────────────────────────────
+async function startAnalysis(){
+  if(FILES.length===0) return;
+  show('confirm-screen');
+  // Parse PDFs to extract account info for confirmation
+  DETECTED_ACCOUNTS = [];
+  for(const file of FILES){
+    const text = await extractText(file);
+    const type = detectType(text);
+    if(type==='unknown') continue;
+    const info = extractAccountInfo(text, type);
+    // Avoid duplicates
+    if(!DETECTED_ACCOUNTS.find(a=>a.clabe===info.clabe&&a.type===info.type)){
+      DETECTED_ACCOUNTS.push({...info, text, confirmed:true});
+    }
+  }
+  renderAccountCards();
+}
+
+function renderAccountCards(){
+  const el = document.getElementById('account-cards');
+  el.innerHTML = DETECTED_ACCOUNTS.map((a,i)=>`
+    <div class="account-card ${a.confirmed?'confirmed':''}" id="ac-${i}">
+      <div class="account-icon" style="background:${a.color}22;color:${a.color}">${a.icon}</div>
+      <div class="account-info">
+        <div class="account-name">${a.label}</div>
+        <div class="account-detail">${a.clabe?`CLABE ···${a.clabe.slice(-4)}`:'Sin CLABE detectada'}</div>
+      </div>
+      <div class="account-toggle ${a.confirmed?'on':''}" id="tog-${i}" onclick="toggleAccount(${i})">
+        ${a.confirmed?'✓':''}
+      </div>
+    </div>`).join('');
+}
+
+function toggleAccount(i){
+  DETECTED_ACCOUNTS[i].confirmed = !DETECTED_ACCOUNTS[i].confirmed;
+  renderAccountCards();
+}
+
+function goBack(){ show('upload-screen'); }
+
+async function confirmAccounts(){
+  CONFIRMED_CLABES = new Set(
+    DETECTED_ACCOUNTS.filter(a=>a.confirmed&&a.clabe).map(a=>a.clabe)
+  );
+  show('processing-screen');
+  await runPipeline();
+}
+
+async function runPipeline(){
+  step(1,'active');
+
+  // Pass 1: extract all texts and detect CLABEs from confirmed accounts
+  const parsedFiles = [];
+  for(const file of FILES){
+    const text = await extractText(file);
+    const type = detectType(text);
+    parsedFiles.push({text, type});
+  }
+
+  // Build complete set of own CLABEs from confirmed accounts + detected in files
+  const allOwnClabes = new Set([...CONFIRMED_CLABES]);
+  parsedFiles.forEach(({text, type})=>{
+    const info = extractAccountInfo(text, type);
+    if(info.clabe) allOwnClabes.add(info.clabe);
+  });
+  const ownClabsArr = [...allOwnClabes];
+
+  // Pass 2: parse all files with full CLABE awareness
+  let allTxns = [], allMSI = [];
+  for(const {text, type} of parsedFiles){
+    if(type==='bbva-credit'){
+      const {txns,msiList} = parseBBVACredit(text);
+      allTxns.push(...txns); allMSI.push(...msiList);
+    } else if(type==='bbva-debit'){
+      const {txns} = parseBBVADebit(text, ownClabsArr);
+      allTxns.push(...txns);
+    } else if(type==='nu'){
+      const {txns} = parseNu(text, ownClabsArr);
+      allTxns.push(...txns);
+    }
+  }
+  step(1,'done'); step(2,'active');
+
+  // Detect internal transfers
+  detectCrossAccountTransfers(allTxns);
+  await sleep(400);
+  step(2,'done'); step(3,'active');
+
+  // AI categorization — only for non-internal transactions
+  const toCateg = allTxns.filter(t=>t.status!=='internal');
+  const merchants = [...new Set(toCateg.map(t=>t.merchant))];
+  const cats = await aiCats(merchants, toCateg.some(t=>t.status==='income'));
+  toCateg.forEach(t=>{
+    const suggested = cats[t.merchant];
+    if(suggested) t.category = suggested;
+    else if(t.status==='income') t.category = fallbackIncome(t.merchant);
+    else t.category = fallbackExpense(t.merchant);
+  });
+  step(3,'done'); step(4,'active');
+
+  // Build dashboard
+  ALL = [...allTxns, ...allMSI];
+  await sleep(300);
+  step(4,'done');
+  await sleep(500);
+  buildDash();
+  show('dashboard-screen');
+}
+
+async function extractText(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  let txt = '';
+  for(let i=1;i<=pdf.numPages;i++){
+    const pg = await pdf.getPage(i);
+    const ct = await pg.getTextContent();
+    txt += ct.items.map(x=>x.str).join(' ') + '\n';
+  }
+  return txt;
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// ── AI CATEGORIZATION ──────────────────────────────────────────────
+async function aiCats(merchants, hasIncome){
+  const incomeIds = INCOME_CATS.map(c=>c.id).join(', ');
+  const expenseIds = EXPENSE_CATS.map(c=>c.id).join(', ');
+  const prompt = `Categorize Mexican bank transaction descriptions. 
+
+Expense categories: ${expenseIds}
+Income categories: ${incomeIds}
+
+Rules for expenses:
+- OXXO/7 ELEVEN/HEB/WALMART/COSTCO = groceries
+- UBER RIDE/DIDI/CABIFY = transport
+- UBER EATS/RAPPI/DIDI FOOD = food
+- NETFLIX/SPOTIFY/GOOGLE/OPENAI/CHATGPT/CALENDLY/TELCEL/APPLE/WHITEPAPER = subscriptions
+- GYMPASS/SPORT CITY = fitness
+- FARMACIA/FARM GUADALAJARA = health
+- CAFE/COFFEE/CAFELIMON/CAFECACAO/KALI/STARBUCKS = cafe
+- REST/TACO/BURGER/GYRO/TEMAK/SUSHI/PIZZA/HELADO/PASTELERIA/NECTARJUICE/FRIDA/BARVIN = food
+- INMOBILIARIA/RENTA = rent
+- MACSTORE/APPLE STORE/BEST BUY = shopping
+- AMAZON = shopping
+- AEROBUS/AEROMEXICO/VOLARIS/VIVA = travel
+- UNIV/CONSULTOR/PAYCLIP/COLEGIO/ORATORIO/TEC = education
+
+Rules for income:
+- Large amount from same sender monthly = salary
+- WISE/DLOCAL/STRIPE/international = freelance
+- Small amounts from individuals = reimbursement
+- Everything else positive = other_income
+
+Transactions:
+${merchants.map((m,i)=>`${i+1}. ${m}`).join('\n')}
+
+Return ONLY JSON: {"MERCHANT": "categoryId"}`;
+
+  try{
+    const r = await fetch('/api/categorize',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({merchants, prompt})
+    });
+    const d = await r.json();
+    if(d.error) throw new Error(d.error);
+    return d.categories;
+  } catch(e){
+    console.warn('AI unavailable, using fallback:', e.message);
+    const result = {};
+    merchants.forEach(m=>{
+      result[m] = fallbackExpense(m);
+    });
+    return result;
+  }
+}
+
+function fallbackExpense(m){
+  const u = m.toUpperCase();
+  if(/UBER EATS|DLO\*UBER EATS/.test(u)) return 'food';
+  if(/UBER|DIDI|CABIFY/.test(u)) return 'transport';
+  if(/OXXO|7 ELEVEN|HEB|WALMART|COSTCO/.test(u)) return 'groceries';
+  if(/FARM|FARMACIA/.test(u)) return 'health';
+  if(/NETFLIX|SPOTIFY|GOOGLE TV|OPENAI|CHATGPT|CALENDLY|TELCEL|WHITEPAPER/.test(u)) return 'subscriptions';
+  if(/GYMPASS/.test(u)) return 'fitness';
+  if(/CAFE|COFFEE|CAFELIMON|CAFECACAO|KALI|LILACAFE|STARBUCKS/.test(u)) return 'cafe';
+  if(/REST|TACO|BURGER|GYRO|TEMAK|BARVIN|PHOLICIOS|HELADO|PASTELER|NECTARJUICE|FRIDA|SALA DE DESPECHO/.test(u)) return 'food';
+  if(/INMOBILIARIA/.test(u)) return 'rent';
+  if(/MACSTORE|APPLE/.test(u)) return 'shopping';
+  if(/AMAZON/.test(u)) return 'shopping';
+  if(/AEROBUS|AEROMEXICO|VOLARIS/.test(u)) return 'travel';
+  if(/ORATORIO|UNIV|CONSULTOR|TEC/.test(u)) return 'education';
+  return 'other';
+}
+
+function fallbackIncome(m){
+  const u = m.toUpperCase();
+  if(/WISE|DLOCAL|STRIPE|PAYPAL/.test(u)) return 'freelance';
+  if(/TESOREDO|SAT|IMSS|GOBIERNO/.test(u)) return 'other_income';
+  return 'reimbursement';
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────────
+function buildDash(){
+  const expenses = ALL.filter(t=>t.status==='expense');
+  const incomes  = ALL.filter(t=>t.status==='income');
+  const msiActive = ALL.filter(t=>t.isMSI);
+
+  const totalIncome  = incomes.reduce((s,t)=>s+t.amount,0);
+  const totalExpense = expenses.reduce((s,t)=>s+t.amount,0);
+  const balance = totalIncome - totalExpense;
+  const msiTotal = [...new Set(msiActive.map(t=>t.merchantClean||t.merchant))]
+    .reduce((s,name)=>{
+      const t = msiActive.find(x=>(x.merchantClean||x.merchant)===name);
+      return s+(t?t.pendingTotal||0:0);
+    },0);
+
+  // Credit card pay-no-interest
+  const creditExpenses = expenses.filter(t=>t.source==='bbva-credit'&&!t.isMSI);
+  const cashAmount = creditExpenses.reduce((s,t)=>s+t.amount,0);
+  const msiMonthly = msiActive.reduce((s,t)=>s+t.amount,0);
+  const payNoInterest = cashAmount + msiMonthly;
+
+  // Detect month from transactions
+  const dates = ALL.map(t=>t.dateObj).filter(d=>d>new Date(2000,0,1));
+  const months = {0:'Enero',1:'Febrero',2:'Marzo',3:'Abril',4:'Mayo',5:'Junio',6:'Julio',7:'Agosto',8:'Septiembre',9:'Octubre',10:'Noviembre',11:'Diciembre'};
+  if(dates.length){
+    const d = dates.sort((a,b)=>a-b)[Math.floor(dates.length/2)];
+    document.getElementById('dash-month').textContent = `${months[d.getMonth()]} ${d.getFullYear()}`;
+  }
+
+  // Summary cards
+  document.getElementById('stat-income').textContent  = fmt(totalIncome);
+  document.getElementById('stat-income-sub').textContent = `${incomes.length} movimientos`;
+  document.getElementById('stat-expense').textContent = fmt(totalExpense);
+  document.getElementById('stat-expense-sub').textContent = `${expenses.length} transacciones`;
+  document.getElementById('stat-balance').textContent = fmt(Math.abs(balance));
+  document.getElementById('stat-balance').className = `stat-value ${balance>=0?'teal':'red'}`;
+
+  const savingsRate = totalIncome>0 ? Math.min(100,(balance/totalIncome)*100) : 0;
+  document.getElementById('balance-bar').style.width = Math.max(0,savingsRate)+'%';
+  document.getElementById('balance-bar').style.background = balance>=0?'var(--teal)':'var(--red)';
+  document.getElementById('balance-pct').textContent = (balance>=0?'+':'-')+Math.abs(savingsRate).toFixed(0)+'%';
+
+  document.getElementById('stat-msi').textContent = fmt(msiTotal);
+  document.getElementById('stat-msi-sub').textContent = `${msiActive.length} plan${msiActive.length!==1?'es':''} activo${msiActive.length!==1?'s':''}`;
+  document.getElementById('stat-pay').textContent = fmt(payNoInterest);
+  document.getElementById('stat-pay-sub').textContent = 'para no generar intereses';
+
+  // Account filter options
+  const accountSel = document.getElementById('account-filter');
+  accountSel.innerHTML = '<option value="">Todas las cuentas</option>';
+  const sources = [...new Set(ALL.map(t=>t.source))];
+  const sourceLabels = {'bbva-credit':'💳 BBVA Crédito','bbva-debit':'🏦 BBVA Débito','nu':'🟣 Nu'};
+  sources.forEach(s=>{ accountSel.innerHTML+=`<option value="${s}">${sourceLabels[s]||s}</option>`; });
+
+  buildCatPanel('gastos');
+  buildTxnFilter();
+  filterTxns();
+}
+
+function buildCatPanel(tab){
+  CURRENT_TAB = tab;
+  document.getElementById('tab-gastos').className = `tab-btn ${tab==='gastos'?'active':''}`;
+  document.getElementById('tab-ingresos').className = `tab-btn ${tab==='ingresos'?'active':''}`;
+
+  const relevant = tab==='gastos'
+    ? ALL.filter(t=>t.status==='expense')
+    : ALL.filter(t=>t.status==='income');
+  const total = relevant.reduce((s,t)=>s+t.amount,0);
+  const ct = {};
+  relevant.forEach(t=>{ ct[t.category]=(ct[t.category]||0)+t.amount; });
+  const sorted = Object.entries(ct).sort((a,b)=>b[1]-a[1]).filter(([,v])=>v>0);
+
+  document.getElementById('cat-list').innerHTML = sorted.map(([id,amt])=>{
+    const c = CM[id]||CM['other'];
+    const pct = (amt/total*100).toFixed(1);
+    return`<div class="cat-item" onclick="filterByCat('${id}')">
+      <div class="cat-row">
+        <div class="cat-name"><div class="cat-dot" style="background:${c.color}"></div>${c.emoji} ${c.label}</div>
+        <div><span class="cat-amount">${fmt(amt)}</span><span class="cat-pct">${pct}%</span></div>
+      </div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${pct}%;background:${c.color}"></div></div>
+    </div>`;
+  }).join('');
+
+  // Otros nudge
+  const otrosCount = tab==='gastos'
+    ? ALL.filter(t=>t.status==='expense'&&t.category==='other').length
+    : ALL.filter(t=>t.status==='income'&&t.category==='other_income').length;
+  const slot = document.getElementById('otros-nudge-slot');
+  slot.innerHTML = otrosCount>0
+    ? `<div class="otros-nudge">💡 <span><strong>${otrosCount} sin categoría</strong> — haz clic en los badges para asignar.</span></div>`
+    : '';
+
+  buildTxnFilter();
+}
+
+function switchTab(tab){ buildCatPanel(tab); }
+
+function buildTxnFilter(){
+  const sel = document.getElementById('cat-filter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todas las categorías</option>';
+  const tab = CURRENT_TAB;
+  const cats = tab==='gastos' ? EXPENSE_CATS : INCOME_CATS;
+  cats.forEach(c=>{ sel.innerHTML+=`<option value="${c.id}">${c.emoji} ${c.label}</option>`; });
+  sel.value = current;
+}
+
+// ── TRANSACTION RENDERING ──────────────────────────────────────────
+let SORT_MODE_STATE = 'amount';
+
+function setSort(mode){
+  SORT_MODE_STATE = mode;
+  document.getElementById('sort-amt').className = `sort-btn ${mode==='amount'?'active':''}`;
+  document.getElementById('sort-date').className = `sort-btn ${mode==='date'?'active':''}`;
+  filterTxns();
+}
+
+function filterTxns(){
+  const s = document.getElementById('search').value.toLowerCase();
+  const cf = document.getElementById('cat-filter').value;
+  const sf = document.getElementById('status-filter').value;
+  const af = document.getElementById('account-filter').value;
+
+  let txns = ALL.filter(t=>{
+    const ms = !s || t.merchant.toLowerCase().includes(s);
+    const mc = !cf || t.category===cf;
+    const mst = !sf || t.status===sf;
+    const ma = !af || t.source===af;
+    return ms&&mc&&mst&&ma;
+  });
+
+  // Sort
+  if(SORT_MODE_STATE==='amount') txns.sort((a,b)=>b.amount-a.amount);
+  else txns.sort((a,b)=>b.dateObj-a.dateObj);
+
+  renderTxns(txns);
+}
+
+function renderTxns(txns){
+  document.getElementById('txn-count').textContent = `${txns.length} movimientos`;
+  const tb = document.getElementById('txn-body');
+  tb.innerHTML = '';
+  const sourceLabels = {'bbva-credit':['💳 TDC','credit'],'bbva-debit':['🏦 Débito','debit'],'nu':['🟣 Nu','nu']};
+
+  txns.forEach(t=>{
+    const isDimmed = t.status==='internal'||t.status==='ignored';
+    const c = CM[t.category]||CM['other'];
+    const [srcLabel,srcClass] = sourceLabels[t.source]||['?',''];
+    const amtClass = t.status==='income'?'pos':isDimmed?'dim':'neg';
+    const amtSign  = t.status==='income'?'+':'';
+    const isOther  = t.category==='other'||t.category==='other_income';
+
+    const tr = document.createElement('tr');
+    tr.className = `txn-row ${isDimmed?'dimmed':''}`;
+    tr.innerHTML = `
+      <td class="txn-date">${t.date}</td>
+      <td class="txn-desc" title="${t.merchant}">
+        ${t.merchant}
+        ${t.isMSI?'<span class="msi-tag">MSI</span>':''}
+        ${t.isNewMSI?`<span class="msi-tag" style="color:var(--yellow);border-color:rgba(245,200,82,0.3)">nueva·${t.msiMonths}m</span>`:''}
+      </td>
+      <td><span class="account-pill ${srcClass}">${srcLabel}</span></td>
+      <td>
+        <span class="cat-badge${isOther?' otros-warn':''}" 
+              onclick="openCatDD(event,'${t.id}')"
+              style="color:${isOther?'var(--yellow)':c.color}">
+          ${isOther?'⚠️':c.emoji} ${c.label}${isOther?' · clasificar':''}
+        </span>
+      </td>
+      <td>
+        <span class="status-badge ${t.status}" onclick="openStatusDD(event,'${t.id}')">
+          ${statusLabel(t.status)}
+        </span>
+      </td>
+      <td class="txn-amount ${amtClass}">${amtSign}${fmt(t.amount)}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function statusLabel(s){
+  return{income:'↑ Ingreso',expense:'↓ Gasto',internal:'⇄ Interna',ignored:'○ Ignorado'}[s]||s;
+}
+
+function filterByCat(id){
+  // Set the right status filter based on which tab is active
+  const statusSel = document.getElementById('status-filter');
+  if(CURRENT_TAB==='gastos') statusSel.value='expense';
+  else if(CURRENT_TAB==='ingresos') statusSel.value='income';
+  // Rebuild cat filter options for current tab so the id exists in the dropdown
+  buildTxnFilter();
+  document.getElementById('cat-filter').value = id;
+  filterTxns();
+}
+
+// ── CATEGORY DROPDOWN ──────────────────────────────────────────────
+function openCatDD(e, id){
+  e.stopPropagation();
+  const t = ALL.find(x=>x.id===id);
+  if(!t) return;
+  const isIncome = t.status==='income';
+  const cats = isIncome ? INCOME_CATS : EXPENSE_CATS;
+  const dd = document.getElementById('cat-dd');
+  dd.innerHTML = `<div class="dd-section">${isIncome?'Fuente de ingreso':'Categoría de gasto'}</div>`
+    + cats.map(c=>`<div class="dd-opt" onclick="assignCat('${id}','${c.id}')" style="color:${c.color}">${c.emoji} ${c.label}</div>`).join('');
+  positionDD(dd, e);
+}
+
+function assignCat(id, catId){
+  const t = ALL.find(x=>x.id===id);
+  if(t){ t.category=catId; rebuildCatPanel(); filterTxns(); toast(`✓ ${CM[catId].label}`); }
+  document.getElementById('cat-dd').style.display='none';
+}
+
+// ── STATUS DROPDOWN ────────────────────────────────────────────────
+function openStatusDD(e, id){
+  e.stopPropagation();
+  const dd = document.getElementById('status-dd');
+  dd.innerHTML = `<div class="dd-section">Cambiar estado</div>`
+    + [
+        ['income','↑ Ingreso','var(--green)'],
+        ['expense','↓ Gasto','var(--red)'],
+        ['internal','⇄ Transferencia interna','var(--muted)'],
+        ['ignored','○ Ignorar','var(--muted2)'],
+      ].map(([s,l,col])=>`<div class="dd-opt" onclick="assignStatus('${id}','${s}')" style="color:${col}">${l}</div>`).join('');
+  positionDD(dd, e);
+}
+
+function assignStatus(id, status){
+  const t = ALL.find(x=>x.id===id);
+  if(t){
+    t.status=status;
+    if(status==='income'&&!INCOME_CATS.find(c=>c.id===t.category)) t.category='other_income';
+    if(status==='expense'&&!EXPENSE_CATS.find(c=>c.id===t.category)) t.category='other';
+    rebuildCatPanel(); filterTxns(); toast(`✓ Actualizado`);
+  }
+  document.getElementById('status-dd').style.display='none';
+}
+
+function rebuildCatPanel(){ buildCatPanel(CURRENT_TAB); buildTxnFilter(); }
+
+function positionDD(dd, e){
+  dd.style.display='block';
+  const rect = e.target.getBoundingClientRect();
+  let top = rect.bottom+6, left = rect.left;
+  if(top+200>window.innerHeight) top=rect.top-200;
+  if(left+190>window.innerWidth) left=window.innerWidth-195;
+  dd.style.top=top+'px'; dd.style.left=left+'px';
+}
+
+document.addEventListener('click',()=>{
+  document.getElementById('cat-dd').style.display='none';
+  document.getElementById('status-dd').style.display='none';
+});
+
+// ── STEP HELPERS ───────────────────────────────────────────────────
+function step(n, state){
+  const el = document.getElementById(`step-${n}`);
+  const ic = document.getElementById(`si-${n}`);
+  el.className = `step ${state}`;
+  if(state==='active') ic.innerHTML='<div class="spinner"></div>';
+  else if(state==='done') ic.textContent='✓';
+  else ic.textContent=n;
+}
+
+// ── UTILS ──────────────────────────────────────────────────────────
+function fmt(n){ return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0}).format(n); }
+
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>{
+    s.classList.toggle('active', s.id===id);
+    s.style.display='';
+  });
+  // Confirm screen is fixed overlay
+  const cs = document.getElementById('confirm-screen');
+  if(id==='confirm-screen'){ cs.style.display='flex'; cs.style.position='fixed'; }
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+function resetApp(){
+  FILES=[]; DETECTED_ACCOUNTS=[]; CONFIRMED_CLABES=new Set(); ALL=[];
+  document.getElementById('file-chips').innerHTML='';
+  document.getElementById('btn-analyze').disabled=true;
+  [1,2,3,4].forEach(n=>step(n,''));
+  show('upload-screen');
+}
+</script>
+</body>
+</html>
