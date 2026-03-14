@@ -71,7 +71,7 @@ ${text.slice(0, 120000)}`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,
+        max_tokens: 16000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -80,14 +80,28 @@ ${text.slice(0, 120000)}`;
     if (data.error) return res.status(502).json({ error: data.error.message });
 
     const raw = data.content?.[0]?.text || '';
-    const clean = raw.replace(/```json|```/g, '').trim();
+
+    // Robustly extract JSON — handle markdown fences, leading text, truncation
+    let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+    // If there's text before the JSON object, find the first {
+    const firstBrace = jsonStr.indexOf('{');
+    if (firstBrace > 0) jsonStr = jsonStr.slice(firstBrace);
+
+    // If response was truncated, find last complete closing brace
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) {
+      jsonStr = jsonStr.slice(0, lastBrace + 1);
+    }
 
     let parsed;
     try {
-      parsed = JSON.parse(clean);
+      parsed = JSON.parse(jsonStr);
     } catch (e) {
-      console.error('JSON parse error:', e, 'Raw:', raw.slice(0, 500));
-      return res.status(500).json({ error: 'Could not parse AI response as JSON', raw: raw.slice(0, 500) });
+      console.error('JSON parse error. Raw start:', raw.slice(0, 300));
+      return res.status(500).json({
+        error: 'Could not parse AI response as JSON — the statement may be too long. Try uploading one file at a time.',
+      });
     }
 
     if (parsed.error) {
