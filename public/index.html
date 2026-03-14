@@ -522,7 +522,9 @@ function buildReview(){
       if(/PAGO TARJETA|PAGO CUENTA DE TERCERO|BMOVIL/i.test(t.description))status='internal';
       ALL_PARSED.push({
         id:uid(),date:t.date,dateObj:parseDate(t.date),
-        merchant:t.description,amount:t.amount,status,
+        merchant:t.description,
+        reference:t.reference||null,
+        amount:t.amount,status,
         category:status==='income'?'other_income':'other',
         source:src,sourceLabel:`${acct.icon} ${stmt.bank}`,sourceClass:acct.cls,
         isMSI:false,isNewMSI:false,counterpartyCLABE:t.counterpartyCLABE||null,
@@ -581,9 +583,17 @@ function buildReview(){
 
 async function categorizeTxns(){
   const toC=ALL_PARSED.filter(t=>t.status!=='internal');
-  const merchants=[...new Set(toC.map(t=>t.merchant))];
+  // Send objects with description + reference when available
+  const seen=new Set();
+  const merchantObjs=[];
+  toC.forEach(t=>{
+    if(!seen.has(t.merchant)){
+      seen.add(t.merchant);
+      merchantObjs.push(t.reference?{description:t.merchant,reference:t.reference}:t.merchant);
+    }
+  });
   try{
-    const r=await fetch('/api/categorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({merchants})});
+    const r=await fetch('/api/categorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({merchants:merchantObjs})});
     const d=await r.json();
     if(d.categories) toC.forEach(t=>{
       t.category=d.categories[t.merchant]||(t.status==='income'?fallbackIncome(t.merchant):fallbackExpense(t.merchant));
@@ -738,7 +748,7 @@ function renderTxns(txns){
     const tr=document.createElement('tr');tr.className=`txn-row ${dim?'dimmed':''}`;
     tr.innerHTML=`
       <td class="txn-date">${t.date}</td>
-      <td class="txn-desc" title="${t.merchant}">${t.merchant}${t.isMSI?'<span class="msi-tag">MSI</span>':''}</td>
+      <td class="txn-desc" title="${t.merchant}">${t.merchant}${t.isMSI?'<span class="msi-tag">MSI</span>':''}${t.reference?`<span class="msi-tag" style="color:var(--muted);border-color:var(--border)">${t.reference}</span>`:''}</td>
       <td><span class="account-pill ${t.sourceClass||'other'}">${t.sourceLabel||t.source}</span></td>
       <td><span class="cat-badge${isOther?' otros-warn':''}" onclick="openCatDD(event,'${t.id}')" style="color:${isOther?'var(--yellow)':c.color}">${isOther?'⚠️':c.emoji} ${c.label}${isOther?' · clasificar':''}</span></td>
       <td><span class="status-badge ${t.status}" onclick="openStatusDD(event,'${t.id}')">${statusLabel(t.status)}</span></td>

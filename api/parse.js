@@ -8,25 +8,26 @@ export default async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
-  const prompt = `You are an expert Mexican bank statement parser. Extract all financial data from this statement text.
+  const prompt = `You are an expert bank statement parser that works with statements from ANY country and ANY bank worldwide. Extract all financial data from this statement text.
 
 Return ONLY valid JSON with NO markdown, NO backticks, NO explanation — just the raw JSON object.
 
 Required structure:
 {
-  "bank": "bank name (e.g. BBVA, Nu, Banamex, Santander, HSBC, Banorte, Scotiabank)",
+  "bank": "bank name (e.g. BBVA, Nu, Banamex, Banco Nacional de Bolivia, HSBC, Chase, etc.)",
   "accountType": "credit | debit | savings",
   "periodStart": "YYYY-MM-DD",
   "periodEnd": "YYYY-MM-DD",
-  "ownClabe": "18-digit CLABE of this account, or null if not found",
-  "currency": "MXN",
+  "ownClabe": "account identifier of this account (CLABE, IBAN, account number, or null)",
+  "currency": "3-letter currency code e.g. MXN, USD, BOB, EUR",
   "transactions": [
     {
-      "date": "DD-MMM-YYYY in Spanish, e.g. 15-feb-2026",
-      "description": "clean merchant or sender/receiver name, remove codes and references",
+      "date": "DD-MMM-YYYY in Spanish if possible, e.g. 15-feb-2026, or ISO format YYYY-MM-DD",
+      "description": "clean merchant or sender/receiver name",
+      "reference": "the payment concept, referencia, or memo field if present — e.g. 'renta', 'colegiatura', 'gimnasio', 'pago servicios'. Leave null if not present.",
       "amount": 1234.56,
       "direction": "credit | debit",
-      "counterpartyCLABE": "18-digit CLABE of the other party from SPEI details, or null"
+      "counterpartyCLABE": "account identifier of the other party if present in SPEI/transfer details, or null"
     }
   ],
   "msiPlans": [
@@ -43,21 +44,22 @@ Required structure:
 }
 
 Critical parsing rules:
-1. direction "credit" = money coming IN to this account (abono, depósito, ingreso)
-   direction "debit" = money going OUT of this account (cargo, retiro, pago, gasto)
-2. For BBVA credit cards: purchases are DEBIT (cargo), payments like BMOVIL.PAGO are also debit but mark description as "PAGO TARJETA DE CREDITO"
-3. For BBVA debit/Nu: SPEI RECIBIDO = credit, SPEI ENVIADO = debit
-4. Extract counterpartyCLABE from SPEI transaction details (the 18-digit number after the bank name)
-5. For MSI (meses sin intereses) plans in the MSI section, add to msiPlans array
-6. For MSI installment rows in regular section (e.g. "08 DE 15 AMAZON MX A MESES"), SKIP them
-7. For new MSI purchases in regular section (e.g. "MACSTORE SAN AGUSTIN A 18 MSI"), include in transactions with description cleaned of "A XX MSI"
-8. Skip payment rows: BMOVIL.PAGO TDC, entries with negative amounts that represent payments received
-9. Clean descriptions: remove references, card numbers, TIPO DE CAMBIO lines, Referencia codes
-10. Nu Cajitas (Retiro de Cajita, Depósito en Cajita, Congelaste saldo) = include but mark as internal savings movement with description starting with "CAJITA:"
-11. If document is not a bank statement, return: {"error": "Not a bank statement: [reason]"}
+1. direction "credit" = money coming IN to this account (abono, depósito, ingreso, haber)
+   direction "debit" = money going OUT of this account (cargo, retiro, pago, gasto, debe)
+2. For credit cards: purchases are DEBIT, payments to the card are also debit but use description "PAGO TARJETA DE CREDITO"
+3. For debit/savings: received transfers = credit, sent transfers = debit
+4. IMPORTANT — extract the "reference" field: In Latin American banks, SPEI and transfer transactions often include a "concepto" or "referencia" field (e.g. "renta", "colegiatura", "Transferencia", "pago gym"). This is extremely valuable for categorization. Extract it separately from the description.
+5. Extract counterpartyCLABE from SPEI/transfer transaction details when an 18-digit number is present
+6. For MSI installment plans section, add to msiPlans array
+7. Skip installment summary rows like "08 DE 15 AMAZON MX A MESES"
+8. For new MSI purchases (e.g. "MACSTORE A 18 MSI"), include in transactions, clean the "A XX MSI" from description
+9. Nu Cajitas (Retiro de Cajita, Depósito en Cajita, Congelaste saldo) = include with description starting "CAJITA:"
+10. Accept statements from ANY bank in ANY country — do not reject based on country of origin
+11. If the document is clearly NOT a bank statement (e.g. it's a utility bill, contract, or random document), return: {"error": "Not a bank statement: [reason]"}
+12. If uncertain whether it's a bank statement, attempt to parse it anyway
 
 Statement text:
-${text.slice(0, 120000)}`; // cap at ~120k chars to stay within context
+${text.slice(0, 120000)}`;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -68,7 +70,7 @@ ${text.slice(0, 120000)}`; // cap at ~120k chars to stay within context
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', // Use Sonnet for parsing — needs to be accurate
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -78,7 +80,6 @@ ${text.slice(0, 120000)}`; // cap at ~120k chars to stay within context
     if (data.error) return res.status(502).json({ error: data.error.message });
 
     const raw = data.content?.[0]?.text || '';
-    // Strip any accidental markdown
     const clean = raw.replace(/```json|```/g, '').trim();
 
     let parsed;
