@@ -253,9 +253,10 @@ h1.upload-title em{color:var(--green);font-style:normal;}
 <div id="month-screen" class="screen">
   <div class="month-card">
     <div class="review-badge">✦ Último paso</div>
-    <h2 class="review-title">¿Qué mes quieres ver?</h2>
-    <p class="review-sub" style="margin-bottom:0">Selecciona el periodo a analizar.</p>
+    <h2 class="review-title">¿Qué periodo quieres ver?</h2>
+    <p class="review-sub" style="margin-bottom:0">Selecciona el mes a analizar.</p>
     <div class="month-grid" id="month-grid"></div>
+    <div id="month-ai-tip" style="display:none;margin-bottom:16px;padding:12px 14px;background:rgba(184,245,82,0.06);border:1px solid rgba(184,245,82,0.2);border-radius:10px;font-size:0.78rem;color:var(--muted);line-height:1.6;"></div>
     <div class="review-btns">
       <button class="btn-secondary" onclick="show('review-screen')">← Volver</button>
       <button class="btn-confirm" id="btn-month-go" onclick="confirmMonth()" disabled>Ver dashboard →</button>
@@ -292,12 +293,12 @@ h1.upload-title em{color:var(--green);font-style:normal;}
           <span style="font-size:0.68rem;color:var(--muted);font-family:'DM Mono',monospace" id="balance-pct">—</span>
         </div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" id="msi-card">
         <div class="stat-label">Deuda MSI activa</div>
         <div class="stat-value" id="stat-msi">—</div>
         <div class="stat-sub" id="stat-msi-sub">—</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" id="pay-card">
         <div class="stat-label">💳 Pagar sin intereses</div>
         <div class="stat-value" style="font-size:1.2rem" id="stat-pay">—</div>
         <div class="stat-sub" id="stat-pay-sub">—</div>
@@ -371,12 +372,14 @@ const EXPENSE_CATS=[
   {id:'fitness',label:'Fitness',emoji:'🏋️',color:'#5af0a0'},
   {id:'travel',label:'Viajes',emoji:'✈️',color:'#f0f05a'},
   {id:'other',label:'Otros',emoji:'📦',color:'#6b6f7a'},
+  {id:'unassigned',label:'Sin categoría',emoji:'❓',color:'#f5c852'},
 ];
 const INCOME_CATS=[
   {id:'salary',label:'Salario',emoji:'💼',color:'#b8f552'},
   {id:'freelance',label:'Freelance',emoji:'💻',color:'#52f5c8'},
   {id:'reimbursement',label:'Reembolso',emoji:'👥',color:'#52aaf5'},
   {id:'other_income',label:'Otro ingreso',emoji:'📥',color:'#a952f5'},
+  {id:'unassigned_income',label:'Sin categoría',emoji:'❓',color:'#f5c852'},
 ];
 const ALL_CATS=[...EXPENSE_CATS,...INCOME_CATS];
 const CM=Object.fromEntries(ALL_CATS.map(c=>[c.id,c]));
@@ -386,6 +389,8 @@ const ACCT_STYLES={credit:{icon:'💳',color:'#f0845a',cls:'credit'},debit:{icon
 let FILES=[], PARSED_STATEMENTS=[], ALL_PARSED=[], ALL=[];
 let CONFIRMED_CLABES=new Set(), SELECTED_MONTH=null;
 let CURRENT_TAB='gastos', SORT_MODE='amount';
+let DETECTED_CURRENCY='MXN'; // updated from parsed statements
+let DETECTED_LOCALE='es-MX';  // updated based on currency
 
 // FILE HANDLING
 const dz=document.getElementById('drop-zone'),fi=document.getElementById('file-input');
@@ -510,6 +515,17 @@ function buildReview(){
   const failed=PARSED_STATEMENTS.filter(s=>s.error);
   CONFIRMED_CLABES=new Set(valid.filter(s=>s.ownClabe).map(s=>s.ownClabe));
 
+  // Detect currency from first valid statement
+  const detectedCurrency = valid.find(s=>s.currency)?.currency || 'MXN';
+  DETECTED_CURRENCY = detectedCurrency;
+  // Map currency to locale for formatting
+  const CURRENCY_LOCALES = {
+    'MXN':'es-MX','USD':'en-US','EUR':'es-ES','BOB':'es-BO',
+    'COP':'es-CO','ARS':'es-AR','CLP':'es-CL','PEN':'es-PE',
+    'BRL':'pt-BR','GTQ':'es-GT','HNL':'es-HN','NIO':'es-NI',
+  };
+  DETECTED_LOCALE = CURRENCY_LOCALES[detectedCurrency] || 'es-MX';
+
   // Build ALL_PARSED
   ALL_PARSED=[];
   valid.forEach(stmt=>{
@@ -525,7 +541,7 @@ function buildReview(){
         merchant:t.description,
         reference:t.reference||null,
         amount:t.amount,status,
-        category:status==='income'?'other_income':'other',
+        category:status==='income'?'unassigned_income':'unassigned',
         source:src,sourceLabel:`${acct.icon} ${stmt.bank}`,sourceClass:acct.cls,
         isMSI:false,isNewMSI:false,counterpartyCLABE:t.counterpartyCLABE||null,
       });
@@ -612,13 +628,13 @@ function fallbackExpense(m){
   if(/REST|TACO|BURGER|GYRO|TEMAK|BARVIN|HELADO|PASTELER|NECTARJUICE|FRIDA/.test(u))return'food';
   if(/INMOBILIARIA/.test(u))return'rent';if(/MACSTORE|APPLE/.test(u))return'shopping';
   if(/AMAZON/.test(u))return'shopping';if(/AEROBUS|AEROMEXICO|VOLARIS|VIVA/.test(u))return'travel';
-  if(/ORATORIO|UNIV|CONSULTOR|TEC/.test(u))return'education';return'other';
+  if(/ORATORIO|UNIV|CONSULTOR|TEC/.test(u))return'education';return'unassigned';
 }
 function fallbackIncome(m){
   const u=m.toUpperCase();
   if(/WISE|DLOCAL|STRIPE|PAYPAL/.test(u))return'freelance';
   if(/TESORED|SAT|IMSS|GOBIERNO/.test(u))return'other_income';
-  return'reimbursement';
+  return'unassigned_income';
 }
 
 // MONTH SELECTOR
@@ -632,22 +648,115 @@ function getAvailableMonths(){
   });
   return Object.values(map).sort((a,b)=>a.year!==b.year?b.year-a.year:b.month-a.month);
 }
+
+// Figure out best month recommendation without AI
+// Logic: find the month with best coverage across all uploaded statements
+function getBestMonth(months){
+  if(!months.length) return null;
+
+  // Collect statement periods
+  const periods = PARSED_STATEMENTS.filter(s=>!s.error&&s.periodStart&&s.periodEnd).map(s=>({
+    start: new Date(s.periodStart),
+    end:   new Date(s.periodEnd),
+  }));
+
+  if(!periods.length) return months[0];
+
+  // For each available month, count how many statements have good coverage
+  // (at least 20 days of that month covered)
+  let bestMonth = months[0], bestScore = -1;
+  months.forEach(m=>{
+    const mStart = new Date(m.year, m.month, 1);
+    const mEnd   = new Date(m.year, m.month+1, 0); // last day of month
+    let score = 0;
+    periods.forEach(p=>{
+      const overlapStart = new Date(Math.max(p.start, mStart));
+      const overlapEnd   = new Date(Math.min(p.end,   mEnd));
+      const overlapDays  = Math.max(0, (overlapEnd - overlapStart) / 86400000);
+      score += overlapDays;
+    });
+    if(score > bestScore){ bestScore = score; bestMonth = m; }
+  });
+  return bestMonth;
+}
+
+// Build the missing-statement tip using statement periods
+function buildMonthTip(selectedMonth){
+  const tipEl = document.getElementById('month-ai-tip');
+  if(!selectedMonth){ tipEl.style.display='none'; return; }
+
+  const mStart = new Date(selectedMonth.year, selectedMonth.month, 1);
+  const mEnd   = new Date(selectedMonth.year, selectedMonth.month+1, 0);
+  const mName  = MONTH_NAMES[selectedMonth.month];
+
+  const periods = PARSED_STATEMENTS.filter(s=>!s.error&&s.periodStart&&s.periodEnd);
+  const tips = [];
+
+  // Check each statement's coverage of the selected month
+  periods.forEach(s=>{
+    const pStart = new Date(s.periodStart);
+    const pEnd   = new Date(s.periodEnd);
+    const overlapStart = new Date(Math.max(pStart, mStart));
+    const overlapEnd   = new Date(Math.min(pEnd, mEnd));
+    const overlapDays  = Math.max(0,(overlapEnd-overlapStart)/86400000);
+    const totalDays    = (mEnd-mStart)/86400000+1;
+    const coverage     = overlapDays/totalDays;
+
+    if(coverage < 0.85 && coverage > 0){
+      // Which month's statement would complete coverage?
+      const missingStart = pEnd < mEnd; // statement ends before month ends
+      const missingMonth = missingStart
+        ? MONTH_NAMES[pEnd.getMonth()] + ' ' + pEnd.getFullYear()
+        : MONTH_NAMES[pStart.getMonth()] + ' ' + pStart.getFullYear();
+      const acct = ACCT_STYLES[s.accountType]||ACCT_STYLES.debit;
+      tips.push(`${acct.icon} Para un análisis completo de ${mName}, sube el estado de ${s.bank} de ${missingMonth}.`);
+    }
+  });
+
+  if(tips.length){
+    tipEl.innerHTML = tips.map(t=>`<div style="margin-bottom:4px">💡 ${t}</div>`).join('');
+    tipEl.style.display='block';
+  } else {
+    tipEl.style.display='none';
+  }
+}
+
 function showMonthSelector(){
   const months=getAvailableMonths();
-  SELECTED_MONTH=months[0]||null;
+  const best=getBestMonth(months);
+  SELECTED_MONTH=best||months[0]||null;
+
   document.getElementById('month-grid').innerHTML=months.map(m=>{
     const sel=SELECTED_MONTH&&SELECTED_MONTH.year===m.year&&SELECTED_MONTH.month===m.month;
+    const mStart=new Date(m.year,m.month,1);
+    const mEnd=new Date(m.year,m.month+1,0);
+    const periods=PARSED_STATEMENTS.filter(s=>!s.error&&s.periodStart&&s.periodEnd);
+    // Calculate coverage %
+    let coverageDays=0,totalDays=(mEnd-mStart)/86400000+1;
+    periods.forEach(s=>{
+      const pS=new Date(s.periodStart),pE=new Date(s.periodEnd);
+      const oS=new Date(Math.max(pS,mStart)),oE=new Date(Math.min(pE,mEnd));
+      coverageDays+=Math.max(0,(oE-oS)/86400000);
+    });
+    const coverage=Math.min(100,Math.round((coverageDays/totalDays)*100));
+    const coverageColor=coverage>=85?'var(--green)':coverage>=50?'var(--yellow)':'var(--red)';
     return`<div class="month-option ${sel?'selected':''}" onclick="selectMonth(${m.year},${m.month})" id="mo-${m.year}-${m.month}">
       <div class="month-option-label">${MONTH_NAMES[m.month]}</div>
-      <div class="month-option-sub">${m.year} · ${m.count} mov.</div></div>`;
+      <div class="month-option-sub">${m.year} · ${m.count} mov.</div>
+      <div style="font-size:0.6rem;margin-top:4px;color:${coverageColor};font-family:'DM Mono',monospace">${coverage}% cobertura</div>
+    </div>`;
   }).join('');
+
+  buildMonthTip(SELECTED_MONTH);
   document.getElementById('btn-month-go').disabled=!SELECTED_MONTH;
   show('month-screen');
 }
+
 function selectMonth(year,month){
   SELECTED_MONTH={year,month};
   document.querySelectorAll('.month-option').forEach(el=>el.classList.remove('selected'));
   document.getElementById(`mo-${year}-${month}`).classList.add('selected');
+  buildMonthTip(SELECTED_MONTH);
   document.getElementById('btn-month-go').disabled=false;
 }
 function confirmMonth(){
@@ -684,6 +793,14 @@ function buildDash(){
   document.getElementById('stat-msi-sub').textContent=`${msiActive.length} plan${msiActive.length!==1?'es activos':'activo'}`;
   document.getElementById('stat-pay').textContent=fmt(payNI);
   document.getElementById('stat-pay-sub').textContent='para no generar intereses';
+  // Hide MSI cards if no MSI plans detected (non-Mexican or no installments)
+  const hasMSI = msiActive.length > 0;
+  document.getElementById('msi-card').style.display = hasMSI ? '' : 'none';
+  document.getElementById('pay-card').style.display = hasMSI ? '' : 'none';
+  // Expand summary bar to fill space when MSI cards hidden
+  document.querySelector('.summary-bar').style.gridTemplateColumns = hasMSI
+    ? '1.4fr 1.4fr 1.6fr 1.2fr 1fr'
+    : '1fr 1fr 1.4fr';
 
   const acctSel=document.getElementById('account-filter');
   acctSel.innerHTML='<option value="">Todas las cuentas</option>';
@@ -701,17 +818,35 @@ function buildCatPanel(tab){
   const rel=tab==='gastos'?ALL.filter(t=>t.status==='expense'):ALL.filter(t=>t.status==='income');
   const total=rel.reduce((s,t)=>s+t.amount,0);
   const ct={};rel.forEach(t=>{ct[t.category]=(ct[t.category]||0)+t.amount;});
-  const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]).filter(([,v])=>v>0);
+  const unassignedId = tab==='gastos'?'unassigned':'unassigned_income';
+  // Sort: unassigned always last
+  const sorted=Object.entries(ct).sort((a,b)=>{
+    if(a[0]===unassignedId) return 1;
+    if(b[0]===unassignedId) return -1;
+    return b[1]-a[1];
+  }).filter(([,v])=>v>0);
   document.getElementById('cat-list').innerHTML=sorted.map(([id,amt])=>{
-    const c=CM[id]||CM['other'],pct=(amt/total*100).toFixed(1);
-    return`<div class="cat-item" onclick="filterByCat('${id}')">
+    const c=CM[id]||CM['unassigned'];
+    const pct=(amt/total*100).toFixed(1);
+    const isUnassigned=id===unassignedId;
+    return`<div class="cat-item ${isUnassigned?'unassigned-item':''}" onclick="${isUnassigned?`filterByCat('${id}',true)`:`filterByCat('${id}')`}">
       <div class="cat-row"><div class="cat-name"><div class="cat-dot" style="background:${c.color}"></div>${c.emoji} ${c.label}</div>
-      <div><span class="cat-amount">${fmt(amt)}</span><span class="cat-pct">${pct}%</span></div></div>
+      <div><span class="cat-amount" style="${isUnassigned?'color:var(--yellow)':''}">${fmt(amt)}</span><span class="cat-pct">${pct}%</span></div></div>
       <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${pct}%;background:${c.color}"></div></div>
     </div>`;
   }).join('');
-  const otros=tab==='gastos'?ALL.filter(t=>t.status==='expense'&&t.category==='other').length:ALL.filter(t=>t.status==='income'&&t.category==='other_income').length;
-  document.getElementById('otros-nudge-slot').innerHTML=otros?`<div class="otros-nudge">💡 <span><strong>${otros} sin categoría</strong> — haz clic en los badges para asignar.</span></div>`:'';
+  const unassignedCount=tab==='gastos'
+    ?ALL.filter(t=>t.status==='expense'&&t.category==='unassigned').length
+    :ALL.filter(t=>t.status==='income'&&t.category==='unassigned_income').length;
+  const slot=document.getElementById('otros-nudge-slot');
+  if(unassignedCount>0){
+    slot.innerHTML=`<div class="otros-nudge" style="cursor:pointer" onclick="filterByCat('${unassignedId}',true)">
+      💡 <span><strong>${unassignedCount} transacción${unassignedCount>1?'es':''} sin categoría</strong>
+      — haz clic aquí para revisarlas y asignarles una categoría.</span>
+    </div>`;
+  } else {
+    slot.innerHTML='';
+  }
   buildTxnFilter();
 }
 function switchTab(tab){buildCatPanel(tab);}
@@ -743,14 +878,14 @@ function renderTxns(txns){
   const tb=document.getElementById('txn-body');tb.innerHTML='';
   txns.forEach(t=>{
     const dim=t.status==='internal'||t.status==='ignored';
-    const c=CM[t.category]||CM['other'];
-    const isOther=t.category==='other'||t.category==='other_income';
+    const c=CM[t.category]||CM['unassigned'];
+    const isUnassigned=t.category==='unassigned'||t.category==='unassigned_income';
     const tr=document.createElement('tr');tr.className=`txn-row ${dim?'dimmed':''}`;
     tr.innerHTML=`
       <td class="txn-date">${t.date}</td>
       <td class="txn-desc" title="${t.merchant}">${t.merchant}${t.isMSI?'<span class="msi-tag">MSI</span>':''}${t.reference?`<span class="msi-tag" style="color:var(--muted);border-color:var(--border)">${t.reference}</span>`:''}</td>
       <td><span class="account-pill ${t.sourceClass||'other'}">${t.sourceLabel||t.source}</span></td>
-      <td><span class="cat-badge${isOther?' otros-warn':''}" onclick="openCatDD(event,'${t.id}')" style="color:${isOther?'var(--yellow)':c.color}">${isOther?'⚠️':c.emoji} ${c.label}${isOther?' · clasificar':''}</span></td>
+      <td><span class="cat-badge${isUnassigned?' otros-warn':''}" onclick="openCatDD(event,'${t.id}')" style="color:${isUnassigned?'var(--yellow)':c.color}">${isUnassigned?'❓':c.emoji} ${c.label}${isUnassigned?' · asignar':''}</span></td>
       <td><span class="status-badge ${t.status}" onclick="openStatusDD(event,'${t.id}')">${statusLabel(t.status)}</span></td>
       <td class="txn-amount ${t.status==='income'?'pos':dim?'dim':'neg'}">${t.status==='income'?'+':''}${fmt(t.amount)}</td>`;
     tb.appendChild(tr);
@@ -760,6 +895,8 @@ function statusLabel(s){return{income:'↑ Ingreso',expense:'↓ Gasto',internal
 function filterByCat(id){
   document.getElementById('status-filter').value=CURRENT_TAB==='gastos'?'expense':'income';
   buildTxnFilter();document.getElementById('cat-filter').value=id;filterTxns();
+  // Scroll transaction panel into view smoothly
+  document.getElementById('txn-body').closest('.panel').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 function openCatDD(e,id){
@@ -785,8 +922,8 @@ function assignStatus(id,status){
   const t=ALL.find(x=>x.id===id);
   if(t){
     t.status=status;
-    if(status==='income'&&!INCOME_CATS.find(c=>c.id===t.category))t.category='other_income';
-    if(status==='expense'&&!EXPENSE_CATS.find(c=>c.id===t.category))t.category='other';
+    if(status==='income'&&!INCOME_CATS.find(c=>c.id===t.category))t.category='unassigned_income';
+    if(status==='expense'&&!EXPENSE_CATS.find(c=>c.id===t.category))t.category='unassigned';
     buildCatPanel(CURRENT_TAB);buildTxnFilter();filterTxns();toast('✓ Actualizado');
   }
   document.getElementById('status-dd').style.display='none';
@@ -808,13 +945,14 @@ function parseDate(s){
   const m3=s.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m3)return new Date(+m3[3],+m3[2]-1,+m3[1]);
   return new Date(0);
 }
-function fmt(n){return new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0}).format(n);}
+function fmt(n){return new Intl.NumberFormat(DETECTED_LOCALE,{style:'currency',currency:DETECTED_CURRENCY,minimumFractionDigits:0,maximumFractionDigits:0}).format(n);}
 function uid(){return Math.random().toString(36).slice(2,10);}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function resetApp(){
   FILES=[];PARSED_STATEMENTS=[];ALL_PARSED=[];ALL=[];CONFIRMED_CLABES=new Set();SELECTED_MONTH=null;
+  DETECTED_CURRENCY='MXN';DETECTED_LOCALE='es-MX';
   document.getElementById('file-chips').innerHTML='';document.getElementById('btn-analyze').disabled=true;
   show('upload-screen');
 }
